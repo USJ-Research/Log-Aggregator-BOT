@@ -6,7 +6,7 @@ import time
 
 import requests
 
-BASE = "https://logger.duvindu.org"
+BASE = ""
 USERNAME = ""
 PASSWORD = ""
 
