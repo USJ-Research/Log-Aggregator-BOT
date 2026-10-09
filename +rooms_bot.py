@@ -267,6 +267,35 @@ def csrf_failure():
     return show("csrf_failure", session.post(f"{BASE}/create-room/", data={"name": "x"}))
 
 
+def register_page():
+    return show("register_page", session.get(f"{BASE}/register/"))  # REGISTER_ACCESSED
+
+
+def own_profile_pages():
+    # PROFILEUPDATE_ACCESSED / PROFILEDELETE_ACCESSED — GET only, nothing is submitted for the real account
+    show("profile_update_page", session.get(f"{BASE}/profile/{USERNAME}/update/"))
+    show("profile_delete_page", session.get(f"{BASE}/profile/{USERNAME}/delete/"))
+
+
+def password_reset_pages():
+    show("password_reset_done_page", session.get(f"{BASE}/password_reset_done/"))
+    show("password_reset_complete_page", session.get(f"{BASE}/password_reset_complete/"))
+
+
+def update_room_bad(room_id):
+    # UPDATEROOM INVALID_REQUEST (400) — empty name
+    return show("update_room_bad", post_form(
+        f"{BASE}/update-room/{room_id}/", {"_method": "PUT", "name": "", "topic": "Testing", "description": ""}
+    ))
+
+
+def missing_pages():
+    # ROOM_FAILED / PROFILE_FAILED (500 — the views catch DoesNotExist) and a plain 404
+    show("missing_room", session.get(f"{BASE}/room/999999999/"))
+    show("missing_profile", session.get(f"{BASE}/profile/no_such_user_bot/"))
+    show("not_found", session.get(f"{BASE}/no-such-page/"))
+
+
 # ---------- composite actions ----------
 
 def auth_cycle(room_id):
@@ -346,7 +375,14 @@ def run_cycle(n, created_rooms):
         "profile": lambda: view_profile(USERNAME),
         "health": hit_health_endpoints,
         "auth": lambda: auth_cycle(room_id),
+        "register_page": register_page,
+        "own_profile_pages": own_profile_pages,
+        "password_reset_pages": password_reset_pages,
     }
+    if random.random() < ERROR_RATE:
+        tasks["update_room_bad"] = lambda: update_room_bad(room_id)
+    if random.random() < ERROR_RATE:
+        tasks["missing_pages"] = missing_pages
     if random.random() < ERROR_RATE:
         tasks["password_reset_bad"] = password_reset_bad
     if random.random() < ERROR_RATE:
