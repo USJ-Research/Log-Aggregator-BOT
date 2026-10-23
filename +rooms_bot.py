@@ -118,10 +118,22 @@ def view_room(room_id, sess=None):
     return show("view_room", (sess or session).get(f"{BASE}/room/{room_id}/"))
 
 
+def view_update_room_page(room_id):
+    # UPDATEROOM_ACCESSED (200) — owner opens the edit-room form without submitting yet
+    return show("view_update_room_page", session.get(f"{BASE}/update-room/{room_id}/"))
+
+
 def update_room(room_id, name, topic, description):
     return show("update_room", post_form(
         f"{BASE}/update-room/{room_id}/",
         {"_method": "PUT", "name": name, "topic": topic, "description": description},
+    ))
+
+
+def update_room_bad(room_id):
+    # UPDATEROOM INVALID_REQUEST (400) — empty name
+    return show("update_room_bad", post_form(
+        f"{BASE}/update-room/{room_id}/", {"_method": "PUT", "name": "", "topic": "Testing", "description": ""}
     ))
 
 
@@ -142,6 +154,11 @@ def get_latest_message_id(room_id):
     return int(ids[0]) if ids else None
 
 
+def view_delete_message_page(message_id):
+    # DELETEMESSAGE_ACCESSED (200) — owner opens the delete-message confirm page without confirming yet
+    return show("view_delete_message_page", session.get(f"{BASE}/delete-message/{message_id}/"))
+
+
 def delete_message(message_id):
     return show("delete_message", post_form(f"{BASE}/delete-message/{message_id}/", {"_method": "DELETE"}))
 
@@ -159,6 +176,16 @@ def update_username(sess, current_username, new_username):
         sess,
     )
     return show(f"update_username ({current_username} -> {new_username})", r)
+
+
+def update_username_bad(sess, current_username):
+    # PROFILEUPDATE INVALID_REQUEST (400) — empty username fails form validation
+    r = post_form(
+        f"{BASE}/profile/{current_username}/update/",
+        {"_method": "PUT", "username": "", "email": f"{current_username}@example.com"},
+        sess,
+    )
+    return show(f"update_username_bad ({current_username})", r)
 
 
 def profile_delete(sess, username):
@@ -248,6 +275,10 @@ def full_password_reset():
     r = show("password_reset_confirm", temp.get(f"{BASE}{link}"))
     if "set-password" not in r.url:
         raise Exception(f"Reset link rejected: {r.url}")
+
+    # PASSWORDRESETCONFIRM INVALID_REQUEST (400) — mismatched new password on an otherwise-valid link.
+    # The token stays valid until the password is actually changed, so the real submission below still works.
+    show("password_reset_set_bad (mismatched)", post_form(r.url, {"new_password1": "Mismatch1!", "new_password2": "Mismatch2!"}, temp))
     r = post_form(r.url, {"new_password1": PASSWORD, "new_password2": PASSWORD}, temp)
     show("password_reset_set (same password)", r)
     if "/password_reset_complete/" not in r.url:
@@ -260,11 +291,6 @@ def full_password_reset():
 def password_reset_bad():
     # PASSWORDRESET INVALID_REQUEST (400) — malformed email
     return show("password_reset_bad", post_form(f"{BASE}/password_reset/", {"email": "not-an-email"}, requests.Session()))
-
-
-def csrf_failure():
-    # CSRF_FAILURE (403) — POST without a token
-    return show("csrf_failure", session.post(f"{BASE}/create-room/", data={"name": "x"}))
 
 
 def register_page():
@@ -280,20 +306,6 @@ def own_profile_pages():
 def password_reset_pages():
     show("password_reset_done_page", session.get(f"{BASE}/password_reset_done/"))
     show("password_reset_complete_page", session.get(f"{BASE}/password_reset_complete/"))
-
-
-def update_room_bad(room_id):
-    # UPDATEROOM INVALID_REQUEST (400) — empty name
-    return show("update_room_bad", post_form(
-        f"{BASE}/update-room/{room_id}/", {"_method": "PUT", "name": "", "topic": "Testing", "description": ""}
-    ))
-
-
-def missing_pages():
-    # ROOM_FAILED / PROFILE_FAILED (500 — the views catch DoesNotExist) and a plain 404
-    show("missing_room", session.get(f"{BASE}/room/999999999/"))
-    show("missing_profile", session.get(f"{BASE}/profile/no_such_user_bot/"))
-    show("not_found", session.get(f"{BASE}/no-such-page/"))
 
 
 # ---------- composite actions ----------
@@ -329,6 +341,9 @@ def temp_user_cycle(n, room_id):
     show("forbidden profile_update", temp.get(f"{BASE}/profile/{USERNAME}/update/"))
     show("forbidden profile_delete", temp.get(f"{BASE}/profile/{USERNAME}/delete/"))
 
+    if random.random() < ERROR_RATE:
+        update_username_bad(temp, username)
+
     new_username = f"{username}_r"
     r = update_username(temp, username, new_username)
     if f"/profile/{new_username}/" in r.url:
@@ -357,13 +372,17 @@ def run_cycle(n, created_rooms):
         return
     created_rooms.add(room_id)
 
-    # always send one message so delete_message has something to work with
+    # always send one message so delete_message / its confirm page has something to work with
     step("send_message", send_message, room_id, random.choice(messages_pool))
 
     tasks = {
         "view_room": lambda: view_room(room_id),
+        "view_update_room_page": lambda: view_update_room_page(room_id),
         "send_message": lambda: send_message(room_id, random.choice(messages_pool)),
         "update_room": lambda: update_room(room_id, f"Bot Room {n} (edited)", "Updated topic", "Edited by script"),
+        "view_delete_message_page": lambda: (
+            view_delete_message_page(msg_id) if (msg_id := get_latest_message_id(room_id)) else print("  No message to view.")
+        ),
         "delete_message": lambda: (
             delete_message(msg_id) if (msg_id := get_latest_message_id(room_id)) else print("  No message to delete.")
         ),
@@ -382,13 +401,9 @@ def run_cycle(n, created_rooms):
     if random.random() < ERROR_RATE:
         tasks["update_room_bad"] = lambda: update_room_bad(room_id)
     if random.random() < ERROR_RATE:
-        tasks["missing_pages"] = missing_pages
-    if random.random() < ERROR_RATE:
         tasks["password_reset_bad"] = password_reset_bad
     if random.random() < ERROR_RATE:
         tasks["send_empty_message"] = lambda: send_empty_message(room_id)
-    if random.random() < ERROR_RATE:
-        tasks["csrf_failure"] = csrf_failure
 
     order = list(tasks)
     random.shuffle(order)
