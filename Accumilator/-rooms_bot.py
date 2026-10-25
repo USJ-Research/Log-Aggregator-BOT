@@ -2,9 +2,9 @@ import re
 
 import requests
 
-BASE = ""
-USERNAME = ""
-PASSWORD = ""
+BASE = "https://logger.duvindu.org"
+USERNAME = "duvindu"
+PASSWORD = "#Gedara@123"
 
 DRY_RUN = False  # set True to only list the rooms that would be deleted
 

@@ -6,11 +6,11 @@ import time
 
 import requests
 
-BASE = ""
-USERNAME = ""
-PASSWORD = ""
+BASE = "https://logger.duvindu.org"
+USERNAME = "duvindu"
+PASSWORD = "#Gedara@123"
 
-RUN_TIMES = 10
+RUN_TIMES = 150
 TEMP_USER_EVERY = 5  # every Nth cycle: throwaway user (register, rename, forbidden checks, self-delete)
 ERROR_RATE = 0.3  # chance per cycle of each "bad request" action (400/401/403 paths)
 DELAY = 0  # seconds to sleep between actions
@@ -19,10 +19,10 @@ DELAY = 0  # seconds to sleep between actions
 # RESET_EMAIL: USERNAME's email on the site. The reset sets the password back to the same PASSWORD.
 # Fill in IMAP_* so the script can read the reset link from that inbox (Gmail: imap.gmail.com + an app password).
 # With IMAP_USER empty it only requests the reset and opens the confirm page with an invalid link.
-RESET_EMAIL = "bot-reset@example.com"
+RESET_EMAIL = "duvindu.inbox@gmail.com"
 IMAP_HOST = "imap.gmail.com"
-IMAP_USER = ""
-IMAP_PASSWORD = ""
+IMAP_USER = "duvindu.inbox@gmail.com"
+IMAP_PASSWORD = "vwla bnsc kjqc vlwx"
 RESET_MAIL_TIMEOUT = 120  # seconds to wait for the reset email
 
 session = requests.Session()
